@@ -13,6 +13,7 @@ var deasync = require('deasync');
 const { Console } = require("console");
 var alexa = null;
 var restart =0;
+var httpServer = null;
 
 
 function requestListener(req, res) {
@@ -111,8 +112,18 @@ wss.on('connection', function connection(_ws) {
 }
 
 function initHTTPServer() {
-    const server = http.createServer(requestListener);
-    server.listen(port, () => {
+    if(httpServer !=null){
+        //already initted http server
+        try{
+            httpServer.closeAllConnections();
+            httpServer.close();
+        }catch(err){
+            console.log("Error closing HTTP Server " + err);
+        }
+    }
+    httpServer = http.createServer(requestListener);
+   
+    httpServer.listen(port, () => {
        console.log(`Server is running on http://localhost:${port}`);
     });
 
@@ -150,6 +161,7 @@ function activityCallback(routine, deviceName, deviceSerial){
 
 function main() {
     restart = 0;
+
     var alexaServiceHost,amazonPage, acceptLanguage,amazonProxyLanguage;
     const args = require('yargs').argv;
     if( args["debug"] != null && args["debug"] == "true"){
@@ -157,12 +169,14 @@ function main() {
     }else{
         DEBUG = false;
     }
+
     alexaServiceHost = args["alexaServiceHost"] || "pitangui.amazon.com";
     amazonPage = args["amazonPage"] || "amazon.com";
     acceptLanguage = args["acceptLanguage"] || "en-US";
     amazonProxyLanguage = args["amazonPageProxyLanguage"] || "en-US";
 
     alexa = new AlexaIntegration(DEBUG,alexaServiceHost, amazonPage, acceptLanguage, amazonProxyLanguage);
+    
     try {
 	initWSServer();
     alexa.init(loginCallback,activityCallback);
