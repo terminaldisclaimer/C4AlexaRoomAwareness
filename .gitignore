@@ -1,3 +1,4 @@
 config/cookie.dat
 cookie.dat
 node_modules
+.dockerignore

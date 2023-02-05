@@ -12,7 +12,7 @@ const port = 3000;
 var deasync = require('deasync');
 const { Console } = require("console");
 var alexa = null;
-var restart =0;
+var restart = 0;
 var httpServer = null;
 
 
@@ -32,53 +32,53 @@ function requestListener(req, res) {
     }
 }
 
-function sendAmazonStatus(loggedIn, err){
-    debug("sendAmazonStatus:" + loggedIn +" : " + err);
+function sendAmazonStatus(loggedIn, err) {
+    debug("sendAmazonStatus:" + loggedIn + " : " + err);
     var response = new Object();
     response.type = "amazonStatus";
-    if (loggedIn){
+    if (loggedIn) {
         response.status = "LoggedIn";
-    }else if(err =="ProxyRunning"){
+    } else if (err == "ProxyRunning") {
         response.status = "ProxyRunning";
-    }else if(err=="Invalid"){
+    } else if (err == "Invalid") {
         response.status = "Invalid Cookie. Deleting and Restarting";
-    }else{
+    } else {
         response.status = "Error";
     }
-    if(ws !=null){
+    if (ws != null) {
         ws.send(JSON.stringify(response));
     }
 }
 
-function handleWSMessage(data){
+function handleWSMessage(data) {
     console.log('Received WebSocket Message %s', data);
     var message;
-    try{
+    try {
         message = JSON.parse(data);
-    }catch(err){
-        console.log("Error parsing: " +err);
+    } catch (err) {
+        console.log("Error parsing: " + err);
     }
-    if(message != null && message.cmd != null){
-        switch(message.cmd){
+    if (message != null && message.cmd != null) {
+        switch (message.cmd) {
             case "queryAmazonStatus":
-                sendAmazonStatus(alexa.getLoggedIn(),alexa.getError());
+                sendAmazonStatus(alexa.getLoggedIn(), alexa.getError());
                 break;
             case "getRoutines":
                 var response = new Object();
-                response.type="getRoutines";
+                response.type = "getRoutines";
                 response.data = alexa.getRoutines();
                 ws.send(JSON.stringify(response));
                 break;
             case "ping":
                 console.log("received ping");
                 var response = new Object();
-                response.type="pong";
+                response.type = "pong";
                 response.data = "pong";
                 ws.send(JSON.stringify(response));
                 break;
             case "getDevices":
                 var response = new Object();
-                response.type="getDevices";
+                response.type = "getDevices";
                 response.data = alexa.getDevices();
                 ws.send(JSON.stringify(response));
                 break;
@@ -87,72 +87,70 @@ function handleWSMessage(data){
         }
     }
 }
-function debug(string){
-    if(DEBUG){
+function debug(string) {
+    if (DEBUG) {
         console.log(string);
     }
 }
-function log(string){
+function log(string) {
     console.log(string)
 }
-function initWSServer(){
+function initWSServer() {
 
-console.log("Initializing Websocket");
-wss.on('connection', function connection(_ws) {
-    log("Connection Established");
-    ws = _ws;
-  _ws.on('error', console.error);
+    console.log("Initializing Websocket");
+    wss.on('connection', function connection(_ws) {
+        log("Connection Established");
+        ws = _ws;
+        _ws.on('error', console.error);
 
-  _ws.on('message', function message(data) {
-    handleWSMessage(data);
-  });
+        _ws.on('message', function message(data) {
+            handleWSMessage(data);
+        });
 
-});
-
-}
-
-function initHTTPServer() {
-    if(httpServer !=null){
-        //already initted http server
-        try{
-            httpServer.closeAllConnections();
-            httpServer.close();
-        }catch(err){
-            console.log("Error closing HTTP Server " + err);
-        }
-    }
-    httpServer = http.createServer(requestListener);
-   
-    httpServer.listen(port, () => {
-       console.log(`Server is running on http://localhost:${port}`);
     });
 
 }
 
-function loginCallback(loggedIn, err){
-    if(loggedIn){
-        restart =0;
-        initHTTPServer();
-        alexa.initRoutines();
-        alexa.initDevices();
-    }else if(err =="Invalid"){
-       /* if (restart < 3){
-            restart++
-            main();
-        }*/
-        process.exit();
+function initHTTPServer() {
+    if (httpServer == null) {
+        try {
+            httpServer = http.createServer(requestListener);
+            httpServer.listen(port, () => {
+                console.log(`Server is running on http://localhost:${port}`);
+            });
+        } catch (err) {
+            console.log("Error starting HTTP Server: " + err);
+        }
+    } else {
+        console.log("HTTP server already running");
     }
-
-    sendAmazonStatus(loggedIn,err); 
 
 }
 
-function activityCallback(routine, deviceName, deviceSerial){
+function loginCallback(loggedIn, err) {
+    if (loggedIn) {
+        restart = 0;
+        initHTTPServer();
+        alexa.initRoutines();
+        alexa.initDevices();
+    } else if (err == "Invalid") {
+        /* if (restart < 3){
+             restart++
+             main();
+         }*/
+        process.exit();
+    }
+
+    sendAmazonStatus(loggedIn, err);
+
+}
+
+function activityCallback(routine, deviceName, deviceSerial) {
     console.log("ROUTINE: " + routine.name + " called on: " + deviceName + " with serial number: " + deviceSerial);
     var response = new Object();
-    response.type="activityStatus";
+    response.type = "activityStatus";
     response.routineName = routine.name;
-    response.routineID = routine.id; 
+    response.routineID = routine.id;
     response.deviceName = deviceName;
     response.deviceSerial = deviceSerial;
     response.automationId = routine.automationId;
@@ -162,11 +160,11 @@ function activityCallback(routine, deviceName, deviceSerial){
 function main() {
     restart = 0;
 
-    var alexaServiceHost,amazonPage, acceptLanguage,amazonProxyLanguage;
+    var alexaServiceHost, amazonPage, acceptLanguage, amazonProxyLanguage;
     const args = require('yargs').argv;
-    if( args["debug"] != null && args["debug"] == "true"){
+    if (args["debug"] != null && args["debug"] == "true") {
         DEBUG = true;
-    }else{
+    } else {
         DEBUG = false;
     }
 
@@ -175,18 +173,18 @@ function main() {
     acceptLanguage = args["acceptLanguage"] || "en-US";
     amazonProxyLanguage = args["amazonPageProxyLanguage"] || "en-US";
 
-    alexa = new AlexaIntegration(DEBUG,alexaServiceHost, amazonPage, acceptLanguage, amazonProxyLanguage);
-    
+    alexa = new AlexaIntegration(DEBUG, alexaServiceHost, amazonPage, acceptLanguage, amazonProxyLanguage);
+
     try {
-	initWSServer();
-    alexa.init(loginCallback,activityCallback);
-   
+        initWSServer();
+        alexa.init(loginCallback, activityCallback);
+
     } catch (err) {
         console.log("ERROR!!: " + err);
     }
 }
 
-process.on('SIGINT', function() {
+process.on('SIGINT', function () {
     process.exit();
 });
 
