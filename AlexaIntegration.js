@@ -84,6 +84,7 @@ class AlexaIntegration {
             var r = this.getRoutine(modifiedUtterance);
             if(r != null){
               this.debug("ROUTINE found:" + r.name);
+              activityCallback(r, activity.name, activity.deviceSerialNumber);
             }else{
               console.log("No Routine found matching: " + activity.description.summary);
               console.log("Check your Alexa Routine phrases, do you have one that matches this?");
