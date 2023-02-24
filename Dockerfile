@@ -6,6 +6,8 @@ ENV DEBUG=""
 ENV SERVICE_HOST=""
 ENV AMAZON_PAGE=""
 ENV LANGUAGE=""
+ENV DOCKER_HOST=""
+ENV HOST=""
 
 
 WORKDIR /app
@@ -16,4 +18,4 @@ RUN npm install --production
 
 COPY . .
 
-CMD exec node main.js --debug=$DEBUG --alexaServiceHost=$SERVICE_HOST --amazonPage=$AMAZON_PAGE --acceptLanguage=$LANGUAGE --amazonPageProxyLanguage=$LANGUAGE
+CMD exec node main.js --debug=$DEBUG --alexaServiceHost=$SERVICE_HOST --amazonPage=$AMAZON_PAGE --acceptLanguage=$LANGUAGE --amazonPageProxyLanguage=$LANGUAGE --dockerHost=$DOCKER_HOST --host=$HOST

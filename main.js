@@ -108,7 +108,6 @@ function activityCallback(routine, deviceName, deviceSerial) {
 
 
 function sendInChunks(topic, data){
-    console.log("sendInChunks");
     var count =0;
     var beginPos =0;
     var chunks = 1;
@@ -116,7 +115,6 @@ function sendInChunks(topic, data){
         var jsonSTR = JSON.stringify(data[i]);
         count+=jsonSTR.length;
         if(count > 900){
-            console.log(i);
             var rout = data.slice(beginPos,i)
             publishMQTT(topic +"/" + chunks,JSON.stringify(rout));
             chunks++;
@@ -145,7 +143,6 @@ function routinesCallback(routines){
 }
 
 function deviceCallback(devices){
-    console.log("devicecallback" + devices);
     debug("device callback" + devices);
     sendInChunks("AlexaRoomAwareness/Devices/All",devices);
    // publishMQTT("AlexaRoomAwareness/Devices/All", JSON.stringify(devices));
@@ -172,12 +169,10 @@ function handleMQTTMessage(topic, message, packet){
         var msg = message.toString().trim();
         switch(msg){
             case "updateRoutines":
-                console.log("updateRoutines");
                 alexa.updateRoutines();
                 publishMQTT("AlexaRoomAwareness/command",""); //reset back to nothing
                 break;
             case "getDevices":
-                console.log("getDevices");
                 alexa.updateDevices();
                 publishMQTT("AlexaRoomAwareness/command",""); //reset back to nothing
             case "":
@@ -224,7 +219,7 @@ function initMQTT(broker){
 function main() {
     restart = 0;
 
-    var alexaServiceHost, amazonPage, acceptLanguage, amazonProxyLanguage;
+    var alexaServiceHost, amazonPage, acceptLanguage, amazonProxyLanguage, host, dockerHost;
     const args = require('yargs').argv;
     if (args["debug"] != null && args["debug"] == "true") {
         DEBUG = true;
@@ -236,13 +231,15 @@ function main() {
     amazonPage = args["amazonPage"] || "amazon.com";
     acceptLanguage = args["acceptLanguage"] || "en-US";
     amazonProxyLanguage = args["amazonPageProxyLanguage"] || "en-US";
-
-    alexa = new AlexaIntegration(DEBUG, alexaServiceHost, amazonPage, acceptLanguage, amazonProxyLanguage);
+    host = args["host"] || "localhost";
+    dockerHost = args["dockerHost"] || "localhost";
+    console.log("Connecting to Docker Host: " + dockerHost);
+    alexa = new AlexaIntegration(DEBUG, host,alexaServiceHost, amazonPage, acceptLanguage, amazonProxyLanguage);
 
     try {
      
         
-        initMQTT("docker.blocknets.org");
+        initMQTT(dockerHost);
         alexa.init(loginCallback, activityCallback, routinesCallback.bind(this),deviceCallback.bind(this));
 
     } catch (err) {

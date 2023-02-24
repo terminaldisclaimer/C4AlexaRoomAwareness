@@ -15,7 +15,7 @@ error = "";
 class AlexaIntegration {
 
 
-  constructor(debug,_alexaServiceHost, _amazonPage, _acceptLanguage, _amazonProxyLanguage) {
+  constructor(debug,_host,_alexaServiceHost, _amazonPage, _acceptLanguage, _amazonProxyLanguage) {
     this.alexa = new Alexa();
     this.cookie = null;
     this.routines = new Array();
@@ -27,6 +27,7 @@ class AlexaIntegration {
     this.amazonPage = _amazonPage;
     this.acceptLanguage = _acceptLanguage;
     this.amazonPageProxyLanguage = _amazonProxyLanguage;
+    this.host = _host
     console.log("Using AlexaServiceHost: " + this.alexaServiceHost);
     console.log("Using AmazonPage: " + this.amazonPage);
     console.log("Using AcceptLanguage: " + this.acceptLanguage);
@@ -67,12 +68,29 @@ class AlexaIntegration {
 
     this.alexa.on('ws-device-activity', (activity) => {
       this.debug("RECEIVED ACTIVITY");
+      this.debug(activity);
       //console.log(activity);
       if (activity != null && activity.data != null && activity.data.intent != null && activity.data.intent == "InvokeRoutineIntent") {
         if (activity.description != null && activity.description.summary != null) {
           var r = this.getRoutine(activity.description.summary);
-          this.debug("ROUTINE:" + r.name);
-          activityCallback(r, activity.name, activity.deviceSerialNumber);
+          if(r != null){
+            this.debug("ROUTINE:" + r.name);
+            activityCallback(r, activity.name, activity.deviceSerialNumber);
+          }else{
+            //this basically shouldn't happen. But sometimes Alexa matches utterances that are close
+            console.log("Couldn't not find a routine matching utterance: " + activity.description.summary);
+            var modifiedUtterance = (String)(activity.description.summary).replaceAll("'","");
+            console.log("Removing contractions, and trying to search with: "+ modifiedUtterance);
+            var r = this.getRoutine(modifiedUtterance);
+            if(r != null){
+              this.debug("ROUTINE found:" + r.name);
+            }else{
+              console.log("No Routine found matching: " + activity.description.summary);
+              console.log("Check your Alexa Routine phrases, do you have one that matches this?");
+              console.log("Outputting Routine to Utterance Mappings");
+              console.log(this.routinesByUtterance);
+            }
+          }
         }
       }
     });
@@ -174,7 +192,7 @@ class AlexaIntegration {
     this.alexa.init({
       cookie: this.cookie,  // cookie if already known, else can be generated using proxy
       proxyOnly: true,
-      proxyOwnIp: '192.168.100.212',
+      proxyOwnIp: this.host,
       proxyPort: 3001,
       proxyLogLevel: 'info',
       bluetooth: false,
@@ -224,6 +242,5 @@ class AlexaIntegration {
        this.initRoutines(); 
      }*/
   }
-
 }
 module.exports = AlexaIntegration;
