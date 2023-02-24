@@ -1,11 +1,14 @@
 let Alexa = require('alexa-remote2');
 let fs = require('fs');
+const { listenerCount } = require('process');
 const vary = require('vary');
 
 unparsed_routines = "";
 unparsed_devices = "";
 devices_updated = false;
 routines_updated = false;
+_routinesCallback = null;
+_deviceCallback = null;
 logged_in = false;
 error = "";
 
@@ -55,7 +58,7 @@ class AlexaIntegration {
 
     this.alexa.on('cookie', (cookie, csrf, macDms) => {
       try {
-        fs.writeFileSync('cookie.dat', JSON.stringify(this.alexa.cookieData));
+        fs.writeFileSync('config/cookie.dat', JSON.stringify(this.alexa.cookieData));
         // file written successfully
       } catch (err) {
         console.error("Cookie Write: " + err);
@@ -76,33 +79,28 @@ class AlexaIntegration {
 
   }
 
-  getRoutines() {
-    return this.routines;
-  }
-
-  getDevices() {
-    return this.devices;
-  }
-
-  initDevices() {
-    devices_updated = false;
-    this.alexa.getDevices(function (err, devices) {
-      unparsed_devices = devices;
-      devices_updated = true;
-    });
-    require('deasync').loopWhile(function () { return !devices_updated; });
-    let deviceArray = unparsed_devices.devices
-    if (deviceArray != null) {
+ 
+  updateDeviceCallback(err,devs){
+    console.log("UpdateDeviceCallback");
+    if (devs != null) {
+      var deviceArray = devs.devices;
       for (var i = 0; i < deviceArray.length; i++) {
         let device = new Object();
         device.name = deviceArray[i].accountName;
         device.serial = deviceArray[i].serialNumber;
         this.devices.push(device);
       }
+
     }
     this.debug("DEVICES JSON:" + JSON.stringify(this.devices));
-    return this.devices;
+    this._deviceCallback(this.devices);
+  }
 
+  updateDevices() {
+    this.devices = new Array();
+    devices_updated = false;
+    console.log("update devices");
+    this.alexa.getDevices(this.updateDeviceCallback.bind(this));
   }
 
   createShortName(str) {
@@ -115,14 +113,8 @@ class AlexaIntegration {
     return str;
   }
 
-
-  initRoutines() {
-    routines_updated = false;
-    this.alexa.getAutomationRoutines(function (err, routines) {
-      unparsed_routines = routines;
-      routines_updated = true;
-    });
-    require('deasync').loopWhile(function () { return !routines_updated; });
+  routineCallback(err, unparsed_routines){
+    console.log("Routine Callback");
     var id = 0;
     for (var i = 0; i < unparsed_routines.length; i++) {
       if (unparsed_routines[i].status == "ENABLED") {
@@ -152,8 +144,17 @@ class AlexaIntegration {
         }
       }
     }
+    this._routinesCallback(this.routines);
 
   }
+
+  updateRoutines() {
+    this.routines = new Array();
+    routines_updated = false;
+    console.log("update routines");
+    this.alexa.getAutomationRoutines(this.routineCallback.bind(this));
+  }
+
   getLoggedIn() {
     return logged_in;
   }
@@ -164,13 +165,16 @@ class AlexaIntegration {
 
  
 
-  init(_callback, activityCallback) {
+  init(_callback, activityCallback, routCallback,deviceCallback) {
     this.loadCookie();
     this.config(activityCallback);
+    this._routinesCallback = routCallback;
+    this._deviceCallback = deviceCallback;
+
     this.alexa.init({
       cookie: this.cookie,  // cookie if already known, else can be generated using proxy
       proxyOnly: true,
-      proxyOwnIp: '192.168.100.161',
+      proxyOwnIp: '192.168.100.212',
       proxyPort: 3001,
       proxyLogLevel: 'info',
       bluetooth: false,

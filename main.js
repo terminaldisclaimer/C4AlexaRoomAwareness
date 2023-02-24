@@ -1,36 +1,16 @@
 const AlexaIntegration = require("./AlexaIntegration.js");
-const http = require("http");
-const url = require('url');
-const WebSocketServer = require('ws');
+const mqtt = require('mqtt');
 
-const wss = new WebSocketServer.Server({ port: 8080 })
 var ws;
 var DEBUG = false;
-
-const host = 'localhost';
-const port = 3000;
-var deasync = require('deasync');
-const { Console } = require("console");
+var mqttClient;
 var alexa = null;
 var restart = 0;
-var httpServer = null;
+
+var deasync = require('deasync');
+const { Console, table } = require("console");
 
 
-function requestListener(req, res) {
-    res.writeHead(200);
-    var pathname = url.parse(req.url).pathname;
-    switch (pathname) {
-        case '/routines':
-            res.end(JSON.stringify(alexa.getRoutines()));
-            break;
-        case '/devices':
-            res.end(JSON.stringify(alexa.getDevices()));
-            break;
-        default:
-            res.end('default');
-            break;
-    }
-}
 
 function sendAmazonStatus(loggedIn, err) {
     debug("sendAmazonStatus:" + loggedIn + " : " + err);
@@ -95,44 +75,19 @@ function debug(string) {
 function log(string) {
     console.log(string)
 }
-function initWSServer() {
 
-    console.log("Initializing Websocket");
-    wss.on('connection', function connection(_ws) {
-        log("Connection Established");
-        ws = _ws;
-        _ws.on('error', console.error);
 
-        _ws.on('message', function message(data) {
-            handleWSMessage(data);
-        });
 
-    });
 
-}
-
-function initHTTPServer() {
-    if (httpServer == null) {
-        try {
-            httpServer = http.createServer(requestListener);
-            httpServer.listen(port, () => {
-                console.log(`Server is running on http://localhost:${port}`);
-            });
-        } catch (err) {
-            console.log("Error starting HTTP Server: " + err);
-        }
-    } else {
-        console.log("HTTP server already running");
-    }
-
-}
-
+//called when Alexa is successfully logged in
 function loginCallback(loggedIn, err) {
     if (loggedIn) {
         restart = 0;
-        initHTTPServer();
-        alexa.initRoutines();
-        alexa.initDevices();
+        alexa.updateRoutines();
+        alexa.updateDevices();
+        subscribeMQTT("AlexaRoomAwareness/command");
+        publishMQTT("AlexaRoomAwareness/connected", "true");
+
     } else if (err == "Invalid") {
         /* if (restart < 3){
              restart++
@@ -140,21 +95,130 @@ function loginCallback(loggedIn, err) {
          }*/
         process.exit();
     }
-
     sendAmazonStatus(loggedIn, err);
-
 }
 
 function activityCallback(routine, deviceName, deviceSerial) {
     console.log("ROUTINE: " + routine.name + " called on: " + deviceName + " with serial number: " + deviceSerial);
     var response = new Object();
-    response.type = "activityStatus";
-    response.routineName = routine.name;
-    response.routineID = routine.id;
     response.deviceName = deviceName;
     response.deviceSerial = deviceSerial;
-    response.automationId = routine.automationId;
-    ws.send(JSON.stringify(response));
+    publishMQTT("AlexaRoomAwareness/Routines/"+routine.automationId+"/triggeredBy", JSON.stringify(response));
+}
+
+
+function sendInChunks(topic, data){
+    console.log("sendInChunks");
+    var count =0;
+    var beginPos =0;
+    var chunks = 1;
+    for(var i=0;i<data.length;i++){
+        var jsonSTR = JSON.stringify(data[i]);
+        count+=jsonSTR.length;
+        if(count > 900){
+            console.log(i);
+            var rout = data.slice(beginPos,i)
+            publishMQTT(topic +"/" + chunks,JSON.stringify(rout));
+            chunks++;
+            beginPos =i;
+            count =0;
+        }else{
+            if(i == data.length -1){
+                var rout = data.slice(beginPos,data.length)
+                publishMQTT(topic +"/" + chunks,JSON.stringify(rout));
+            }
+        }
+    }
+}
+
+function routinesCallback(routines){
+    debug("routine callback" + routines);
+    sendInChunks("AlexaRoomAwareness/Routines/All",routines);
+    //publishMQTT("AlexaRoomAwareness/Routines/All",JSON.stringify(routines).substring(1,990));
+
+    for(var i=0;i<routines.length;i++){
+        publishMQTT("AlexaRoomAwareness/Routines/"+routines[i].automationId+"/triggeredBy", "f");
+        publishMQTT("AlexaRoomAwareness/Routines/"+routines[i].automationId+"/shortName", routines[i].shortName);
+        publishMQTT("AlexaRoomAwareness/Routines/"+routines[i].automationId+"/name", routines[i].name);
+        publishMQTT("AlexaRoomAwareness/Routines/"+routines[i].automationId+"/utterances", JSON.stringify(routines[i].utterances));
+    }
+}
+
+function deviceCallback(devices){
+    console.log("devicecallback" + devices);
+    debug("device callback" + devices);
+    sendInChunks("AlexaRoomAwareness/Devices/All",devices);
+   // publishMQTT("AlexaRoomAwareness/Devices/All", JSON.stringify(devices));
+}
+
+function publishMQTT(topic, data){
+    var options={
+        retain:true,
+        qos:1};
+    if (mqttClient != null && mqttClient.connected==true){
+        mqttClient.publish(topic,data),options;
+    }
+}
+
+function subscribeMQTT(topic){
+    console.log("Subscribing to topic: " + topic);
+    if (mqttClient != null && mqttClient.connected==true){
+        mqttClient.subscribe(topic,{qos:1});
+    }
+}
+
+function handleMQTTMessage(topic, message, packet){
+    if (topic!=null && topic == "AlexaRoomAwareness/command"){
+        var msg = message.toString().trim();
+        switch(msg){
+            case "updateRoutines":
+                console.log("updateRoutines");
+                alexa.updateRoutines();
+                publishMQTT("AlexaRoomAwareness/command",""); //reset back to nothing
+                break;
+            case "getDevices":
+                console.log("getDevices");
+                alexa.updateDevices();
+                publishMQTT("AlexaRoomAwareness/command",""); //reset back to nothing
+            case "":
+                //cmd reset--do nothing
+                break;
+            default:
+                console.log("Unknown Command: " + message);
+        }
+    }
+    console.log("message is "+ message);
+    console.log("topic is "+ topic);
+}
+
+function initMQTT(broker){
+    console.log("Connecting to MQTT Broker: " + broker);
+    try {
+        
+        options={
+            clientId:"mqttjs-alexa",
+            //username:"ntlord",
+            //password:"vZe2rdwx",
+            clean:true};
+        
+        mqttClient = mqtt.connect("mqtt://" + broker,options);
+        mqttClient.on("connect",function(){	
+            console.log("MQTT connected to broker");
+         
+        });
+        
+        //if can't connect let's exit
+        mqttClient.on("error",function(error){
+            console.log("Can't connect to MQTT broker" + error);
+            process.exit(1)});
+        
+        mqttClient.on('message',handleMQTTMessage);
+
+
+
+    } catch (err) {
+        console.log("ERROR!!: " + err);
+    }
 }
 
 function main() {
@@ -176,8 +240,10 @@ function main() {
     alexa = new AlexaIntegration(DEBUG, alexaServiceHost, amazonPage, acceptLanguage, amazonProxyLanguage);
 
     try {
-        initWSServer();
-        alexa.init(loginCallback, activityCallback);
+     
+        
+        initMQTT("docker.blocknets.org");
+        alexa.init(loginCallback, activityCallback, routinesCallback.bind(this),deviceCallback.bind(this));
 
     } catch (err) {
         console.log("ERROR!!: " + err);
