@@ -10,7 +10,7 @@ This will allow you to have room context information in C4 for Alexa Routines. B
 
 1. Install the docker image and ensure you are logged into amazon and it is working. You'll know that because you will see a "Logged In" show up in the logs. 
 2. Install a MQTT broker and ensure it is working. 
-3. Install Berto Agent and configure it to connect to your MQTT broker.
+3. Install Berto Agent(https://prod.berto.io/c4z/) and configure it to connect to your MQTT broker.
 4. Then you need to install the C4Z file, and hit connect under the Actions tab. For every routine you want to have handled in C4 add a copy of the driver. 
 5. The driver will need to be configured for a specific routine. To do this, under the actions tab click "Get Routines." This will print a table mapping automatinoIDs to Routines. The automationId will look something like "amzn1.alexa.automation.7813ada9-92f0-4bcf-88dd-36130b69d8bf" Copy and paste the full automationId into the automationID property. THEN HIT CONNECT TO MQTT BROKER again. 
 6. If at any point, you add routines or delete routines in Amazon it's probably easiest to restart the docker container for AlexaRoomAwareness.
